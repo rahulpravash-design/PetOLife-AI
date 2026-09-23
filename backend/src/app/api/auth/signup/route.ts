@@ -15,7 +15,9 @@ export async function POST(request: Request) {
     const { email, password, name } = await parseBody(request, schema);
 
     if (usersRepo.findByEmail(email)) {
-      return errorResponse(409, 'An account with this email already exists');
+      // Generic message/status (matches validation-error shape) so this endpoint
+      // can't be used to enumerate which emails already have accounts.
+      return errorResponse(400, 'Unable to create account with the provided details.');
     }
 
     const user = usersRepo.create(email, hashPassword(password), name);

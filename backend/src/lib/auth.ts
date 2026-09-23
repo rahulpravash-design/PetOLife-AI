@@ -1,7 +1,12 @@
+import { randomBytes } from 'node:crypto';
+
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
-const DEV_FALLBACK_SECRET = 'petolife-dev-secret-do-not-use-in-production';
+// Generated per-process, not hardcoded: a fixed dev secret in source would be a known
+// value anyone could forge tokens with. Restarting the server invalidates existing
+// dev tokens, which is fine for local dev.
+const DEV_FALLBACK_SECRET = randomBytes(32).toString('hex');
 
 function getSecret(): string {
   const secret = process.env.JWT_SECRET;
