@@ -1,5 +1,12 @@
 # PetOLife — Mobile Migration Plan
 
+> Status (2026-09-23): all 19 phases implemented and verified (typecheck, lint, unit tests,
+> integration tests against a running backend, and Metro bundle compiles). See
+> [DEMO.md](./DEMO.md) and [SETUP.md](./SETUP.md). Two things remain genuinely external and
+> require the user's own account login: provisioning real Postgres/Clerk via Vercel Marketplace
+> (currently a local SQLite dev DB + custom JWT auth, swappable via the repository layer in
+> `backend/src/lib/repositories/`), and running `eas login` / `eas build` for real device builds.
+
 ## 1. Current state (audit, 2026-09-23)
 
 The repo was scaffolded once via `create-next-app` and never built on. It contains:

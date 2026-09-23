@@ -1,0 +1,25 @@
+import { z } from 'zod';
+
+import { errorResponse, handleRoute, parseBody } from '@/lib/api-utils';
+import { hashPassword, signToken } from '@/lib/auth';
+import { usersRepo } from '@/lib/repositories/users';
+
+const schema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+  name: z.string().min(1, 'Name is required'),
+});
+
+export async function POST(request: Request) {
+  return handleRoute(async () => {
+    const { email, password, name } = await parseBody(request, schema);
+
+    if (usersRepo.findByEmail(email)) {
+      return errorResponse(409, 'An account with this email already exists');
+    }
+
+    const user = usersRepo.create(email, hashPassword(password), name);
+    const token = signToken(user.id);
+    return { token, user };
+  });
+}
