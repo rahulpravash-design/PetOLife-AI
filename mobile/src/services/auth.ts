@@ -12,4 +12,6 @@ export const authService = {
 
   signup: (email: string, password: string, name: string) =>
     api.post<AuthResponse>('/api/auth/signup', { email, password, name }),
+
+  logout: () => api.post<void>('/api/auth/logout'),
 };

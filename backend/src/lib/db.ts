@@ -61,4 +61,26 @@ db.exec(`
     created_at TEXT NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_reminders_pet_id ON reminders(pet_id);
+
+  -- Generic keyed counter used for both login brute-force backoff (Finding 1)
+  -- and fixed-window request throttling (Finding 3). "count" resets whenever
+  -- "window_start" is older than the caller's window; "locked_until" (if set)
+  -- blocks the key until that instant regardless of window/count.
+  CREATE TABLE IF NOT EXISTS rate_limit_state (
+    key TEXT PRIMARY KEY,
+    count INTEGER NOT NULL,
+    window_start TEXT NOT NULL,
+    locked_until TEXT
+  );
+
+  -- One row per issued JWT (jti claim). Lets us revoke a specific token
+  -- server-side (logout) instead of only relying on client-side deletion.
+  CREATE TABLE IF NOT EXISTS sessions (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    revoked_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 `);

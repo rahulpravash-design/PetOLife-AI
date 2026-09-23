@@ -31,3 +31,12 @@ export async function parseBody<T>(request: Request, schema: ZodType<T>): Promis
   }
   return result.data;
 }
+
+// Local dev has no reverse proxy, so every request falls back to the same
+// 'unknown' bucket - that's expected here. In a real deployment (Vercel or
+// any proxy that sets x-forwarded-for) this resolves to the real client IP.
+export function getClientIp(request: Request): string {
+  const forwarded = request.headers.get('x-forwarded-for');
+  if (forwarded) return forwarded.split(',')[0].trim();
+  return request.headers.get('x-real-ip') ?? 'unknown';
+}

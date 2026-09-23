@@ -1,7 +1,14 @@
 import { z } from 'zod';
 
-import { errorResponse, handleRoute, parseBody } from '@/lib/api-utils';
-import { signToken, verifyPassword } from '@/lib/auth';
+import { errorResponse, getClientIp, handleRoute, parseBody } from '@/lib/api-utils';
+import { signToken, verifyPasswordOrDummy } from '@/lib/auth';
+import {
+  checkLoginLock,
+  loginEmailKey,
+  loginIpKey,
+  recordLoginFailure,
+  recordLoginSuccess,
+} from '@/lib/rate-limit';
 import { usersRepo } from '@/lib/repositories/users';
 
 const schema = z.object({
@@ -13,11 +20,22 @@ export async function POST(request: Request) {
   return handleRoute(async () => {
     const { email, password } = await parseBody(request, schema);
 
+    const emailKey = loginEmailKey(email);
+    const ipKey = loginIpKey(getClientIp(request));
+
+    if (checkLoginLock(emailKey, ipKey).locked) {
+      return errorResponse(429, 'Too many attempts. Please try again later.');
+    }
+
     const user = usersRepo.findByEmail(email);
-    if (!user || !verifyPassword(password, user.password_hash)) {
+    const valid = verifyPasswordOrDummy(password, user?.password_hash ?? null);
+
+    if (!user || !valid) {
+      recordLoginFailure(emailKey, ipKey);
       return errorResponse(401, 'Invalid email or password');
     }
 
+    recordLoginSuccess(emailKey);
     const token = signToken(user.id);
     return { token, user: { id: user.id, email: user.email, name: user.name } };
   });

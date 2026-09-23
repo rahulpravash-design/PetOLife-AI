@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { errorResponse, handleRoute, parseBody } from '@/lib/api-utils';
 import { requireUserId } from '@/lib/auth';
 import { requireOwnedPet } from '@/lib/authorize';
+import { checkAndConsumeThrottle, extractUserKey } from '@/lib/rate-limit';
 
 const RECORD_TYPES = [
   'weight',
@@ -15,8 +16,17 @@ const RECORD_TYPES = [
   'note',
 ] as const;
 
+// Caps the decoded image size; base64 inflates raw bytes by ~4/3, so this
+// comfortably covers a typical phone photo of a document.
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const MAX_REQUEST_BYTES = Math.ceil((MAX_IMAGE_BYTES * 4) / 3) + 4096; // + slack for JSON/mimeType overhead
+const MAX_BASE64_CHARS = Math.ceil(MAX_IMAGE_BYTES / 3) * 4;
+
+const EXTRACT_THROTTLE_LIMIT = 10;
+const EXTRACT_THROTTLE_WINDOW_MS = 5 * 60 * 1000;
+
 const requestSchema = z.object({
-  imageBase64: z.string().min(1),
+  imageBase64: z.string().min(1).max(MAX_BASE64_CHARS, 'Image is too large'),
   mimeType: z.string().default('image/jpeg'),
 });
 
@@ -37,9 +47,26 @@ type Params = { params: Promise<{ id: string }> };
 
 export async function POST(request: Request, { params }: Params) {
   return handleRoute(async () => {
+    // Cheapest check first: reject an oversized body before doing any auth,
+    // DB, or AI work. Content-Length isn't guaranteed to be present/accurate
+    // (e.g. chunked transfer), so the zod .max() below is the real backstop.
+    const contentLength = request.headers.get('content-length');
+    if (contentLength && Number(contentLength) > MAX_REQUEST_BYTES) {
+      return errorResponse(413, 'Document image is too large.');
+    }
+
     const userId = requireUserId(request);
     const { id } = await params;
     requireOwnedPet(userId, id);
+
+    const throttle = checkAndConsumeThrottle(
+      extractUserKey(userId),
+      EXTRACT_THROTTLE_LIMIT,
+      EXTRACT_THROTTLE_WINDOW_MS,
+    );
+    if (throttle.locked) {
+      return errorResponse(429, 'Too many document scans. Please try again in a few minutes.');
+    }
 
     if (!process.env.AI_GATEWAY_API_KEY) {
       return errorResponse(501, 'Document extraction requires AI_GATEWAY_API_KEY to be configured');

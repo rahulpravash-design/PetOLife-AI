@@ -1,11 +1,24 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { authService } from '@/services/auth';
 import { useAuthStore } from '@/store/auth-store';
 
 export default function ProfileScreen() {
   const user = useAuthStore((s) => s.user);
   const signOut = useAuthStore((s) => s.signOut);
+
+  const handleSignOut = async () => {
+    // Best-effort: revoke the session server-side, but still clear the local
+    // token even if the request fails (offline, expired token, etc.) so the
+    // user is never stuck unable to log out on their own device.
+    try {
+      await authService.logout();
+    } catch {
+      // ignore - local sign-out below still proceeds
+    }
+    await signOut();
+  };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -14,7 +27,7 @@ export default function ProfileScreen() {
         <Text style={styles.name}>{user?.name ?? 'PetOLife user'}</Text>
         <Text style={styles.email}>{user?.email}</Text>
       </View>
-      <Pressable style={styles.signOutButton} onPress={() => signOut()}>
+      <Pressable style={styles.signOutButton} onPress={handleSignOut}>
         <Text style={styles.signOutText}>Sign Out</Text>
       </Pressable>
     </SafeAreaView>

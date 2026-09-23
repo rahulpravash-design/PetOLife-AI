@@ -9,7 +9,8 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:integration": "node scripts/integration-test.mjs",
-    "seed:demo": "node scripts/seed-demo.mjs"
+    "seed:demo": "node scripts/seed-demo.mjs",
+    "reset:rate-limits": "node scripts/reset-rate-limits.mjs"
   },
   "dependencies": {
     "ai": "^7.0.111",

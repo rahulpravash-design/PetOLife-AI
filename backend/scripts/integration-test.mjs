@@ -115,6 +115,47 @@ async function main() {
   const crossAccessRes = await fetch(`${BASE_URL}/api/pets/${pet.id}`, { headers: otherAuth });
   assert(crossAccessRes.status === 404, "another user cannot access someone else's pet (404, not 403)");
 
+  console.log('security: login rate limiting');
+  const lockoutEmail = `lockout-${Date.now()}@example.com`;
+  let lastLoginStatus = 0;
+  for (let i = 0; i < 6; i++) {
+    const res = await fetch(`${BASE_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: lockoutEmail, password: 'wrong-guess' }),
+    });
+    lastLoginStatus = res.status;
+    if (i < 5) assert(res.status === 401, `login attempt ${i + 1} for a locked-out email is a normal 401`);
+  }
+  assert(lastLoginStatus === 429, `6th login attempt within the lockout window is rate-limited (got ${lastLoginStatus})`);
+
+  console.log('security: document extraction size limit');
+  const oversizedBase64 = 'A'.repeat(15_000_000); // well past the 10MB decoded / ~14M-char limit
+  const oversizedRes = await fetch(`${BASE_URL}/api/pets/${pet.id}/extract-document`, {
+    method: 'POST',
+    headers: auth,
+    body: JSON.stringify({ imageBase64: oversizedBase64, mimeType: 'image/jpeg' }),
+  });
+  assert(oversizedRes.status === 413, `oversized document upload is rejected before processing (got ${oversizedRes.status})`);
+
+  console.log('security: logout revokes the session');
+  const sessionSignup = await json(
+    await fetch(`${BASE_URL}/api/auth/signup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: `session-${Date.now()}@example.com`, password, name: 'Session Test' }),
+    }),
+  );
+  const sessionAuth = { Authorization: `Bearer ${sessionSignup.token}` };
+  const beforeLogoutRes = await fetch(`${BASE_URL}/api/pets`, { headers: sessionAuth });
+  assert(beforeLogoutRes.status === 200, 'token works before logout');
+
+  const logoutRes = await fetch(`${BASE_URL}/api/auth/logout`, { method: 'POST', headers: sessionAuth });
+  assert(logoutRes.status === 204, 'logout succeeds');
+
+  const afterLogoutRes = await fetch(`${BASE_URL}/api/pets`, { headers: sessionAuth });
+  assert(afterLogoutRes.status === 401, 'the same token is rejected after logout (session revoked)');
+
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
 }
