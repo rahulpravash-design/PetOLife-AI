@@ -16,9 +16,9 @@ type Params = { params: Promise<{ id: string; reminderId: string }> };
 
 export async function PATCH(request: Request, { params }: Params) {
   return handleRoute(async () => {
-    const userId = requireUserId(request);
+    const userId = await requireUserId(request);
     const { id, reminderId } = await params;
-    requireOwnedReminder(userId, id, reminderId);
+    await requireOwnedReminder(userId, id, reminderId);
     const data = await parseBody(request, updateSchema);
     return remindersRepo.update(reminderId, data);
   });
@@ -26,10 +26,10 @@ export async function PATCH(request: Request, { params }: Params) {
 
 export async function DELETE(request: Request, { params }: Params) {
   return handleRoute(async () => {
-    const userId = requireUserId(request);
+    const userId = await requireUserId(request);
     const { id, reminderId } = await params;
-    requireOwnedReminder(userId, id, reminderId);
-    remindersRepo.remove(reminderId);
+    await requireOwnedReminder(userId, id, reminderId);
+    await remindersRepo.remove(reminderId);
     return new Response(null, { status: 204 });
   });
 }

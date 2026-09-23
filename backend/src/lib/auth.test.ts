@@ -50,34 +50,34 @@ describe('verifyPasswordOrDummy', () => {
 });
 
 describe('session-backed auth (signToken / requireUserId / revocation)', () => {
-  it('accepts a freshly-signed token', () => {
-    const user = createTestUser();
-    const token = signToken(user.id);
-    expect(requireUserId(authRequest(token))).toBe(user.id);
+  it('accepts a freshly-signed token', async () => {
+    const user = await createTestUser();
+    const token = await signToken(user.id);
+    expect(await requireUserId(authRequest(token))).toBe(user.id);
   });
 
-  it('rejects a token whose session has been revoked (logout)', () => {
-    const user = createTestUser();
-    const token = signToken(user.id);
+  it('rejects a token whose session has been revoked (logout)', async () => {
+    const user = await createTestUser();
+    const token = await signToken(user.id);
 
     // Mirrors what the logout route does: decode isn't exposed directly, so
     // pull the jti the same way requireSession does, via the token payload.
     const [, payloadB64] = token.split('.');
     const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8')) as { jti: string };
-    sessionsRepo.revoke(payload.jti);
+    await sessionsRepo.revoke(payload.jti);
 
-    expect(() => requireUserId(authRequest(token))).toThrow();
+    await expect(requireUserId(authRequest(token))).rejects.toThrow();
   });
 
-  it('rejects a session that has already expired', () => {
-    const user = createTestUser();
+  it('rejects a session that has already expired', async () => {
+    const user = await createTestUser();
     // Bypass signToken's 7d TTL to simulate an expired session directly.
-    const jti = sessionsRepo.create(user.id, new Date(Date.now() - 1000).toISOString());
-    expect(sessionsRepo.isActive(jti)).toBe(false);
+    const jti = await sessionsRepo.create(user.id, new Date(Date.now() - 1000).toISOString());
+    expect(await sessionsRepo.isActive(jti)).toBe(false);
   });
 
-  it('rejects requests with no token and with a malformed token', () => {
-    expect(() => requireUserId(new Request('http://localhost/test'))).toThrow();
-    expect(() => requireUserId(authRequest('not-a-real-token'))).toThrow();
+  it('rejects requests with no token and with a malformed token', async () => {
+    await expect(requireUserId(new Request('http://localhost/test'))).rejects.toThrow();
+    await expect(requireUserId(authRequest('not-a-real-token'))).rejects.toThrow();
   });
 });

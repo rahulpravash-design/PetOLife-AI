@@ -9,7 +9,7 @@ interface ReminderRow {
   title: string;
   due_date: string;
   notes: string | null;
-  is_done: number;
+  is_done: number | boolean;
   created_at: string;
 }
 
@@ -26,44 +26,51 @@ function toReminder(row: ReminderRow): Reminder {
 }
 
 export const remindersRepo = {
-  listByPet(petId: string): Reminder[] {
-    const rows = db
-      .prepare('SELECT * FROM reminders WHERE pet_id = ? ORDER BY due_date ASC')
-      .all(petId) as ReminderRow[];
+  async listByPet(petId: string): Promise<Reminder[]> {
+    const rows = await db.all<ReminderRow>(
+      'SELECT * FROM reminders WHERE pet_id = ? ORDER BY due_date ASC',
+      [petId],
+    );
     return rows.map(toReminder);
   },
 
-  findById(id: string): Reminder | null {
-    const row = db.prepare('SELECT * FROM reminders WHERE id = ?').get(id) as
-      | ReminderRow
-      | undefined;
+  async findById(id: string): Promise<Reminder | null> {
+    const row = await db.get<ReminderRow>('SELECT * FROM reminders WHERE id = ?', [id]);
     return row ? toReminder(row) : null;
   },
 
-  create(petId: string, data: Omit<Reminder, 'id' | 'petId' | 'createdAt' | 'isDone'>): Reminder {
+  async create(
+    petId: string,
+    data: Omit<Reminder, 'id' | 'petId' | 'createdAt' | 'isDone'>,
+  ): Promise<Reminder> {
     const id = randomUUID();
     const createdAt = new Date().toISOString();
-    db.prepare(
+    await db.run(
       `INSERT INTO reminders (id, pet_id, title, due_date, notes, is_done, created_at)
        VALUES (?, ?, ?, ?, ?, 0, ?)`,
-    ).run(id, petId, data.title, data.dueDate, data.notes ?? null, createdAt);
+      [id, petId, data.title, data.dueDate, data.notes ?? null, createdAt],
+    );
     return { id, petId, createdAt, isDone: false, ...data };
   },
 
-  update(
+  async update(
     id: string,
     data: Partial<Omit<Reminder, 'id' | 'petId' | 'createdAt'>>,
-  ): Reminder | null {
-    const existing = this.findById(id);
+  ): Promise<Reminder | null> {
+    const existing = await this.findById(id);
     if (!existing) return null;
     const merged = { ...existing, ...data };
-    db.prepare(
-      'UPDATE reminders SET title = ?, due_date = ?, notes = ?, is_done = ? WHERE id = ?',
-    ).run(merged.title, merged.dueDate, merged.notes ?? null, merged.isDone ? 1 : 0, id);
+    await db.run('UPDATE reminders SET title = ?, due_date = ?, notes = ?, is_done = ? WHERE id = ?', [
+      merged.title,
+      merged.dueDate,
+      merged.notes ?? null,
+      merged.isDone ? 1 : 0,
+      id,
+    ]);
     return this.findById(id);
   },
 
-  remove(id: string): void {
-    db.prepare('DELETE FROM reminders WHERE id = ?').run(id);
+  async remove(id: string): Promise<void> {
+    await db.run('DELETE FROM reminders WHERE id = ?', [id]);
   },
 };

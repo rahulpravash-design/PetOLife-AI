@@ -29,18 +29,18 @@ type Params = { params: Promise<{ id: string }> };
 
 export async function GET(request: Request, { params }: Params) {
   return handleRoute(async () => {
-    const userId = requireUserId(request);
+    const userId = await requireUserId(request);
     const { id } = await params;
-    requireOwnedPet(userId, id);
+    await requireOwnedPet(userId, id);
     return recordsRepo.listByPet(id);
   });
 }
 
 export async function POST(request: Request, { params }: Params) {
   return handleRoute(async () => {
-    const userId = requireUserId(request);
+    const userId = await requireUserId(request);
     const { id } = await params;
-    requireOwnedPet(userId, id);
+    await requireOwnedPet(userId, id);
     const data = await parseBody(request, createSchema);
     return recordsRepo.create(id, data);
   });

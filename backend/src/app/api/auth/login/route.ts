@@ -23,20 +23,20 @@ export async function POST(request: Request) {
     const emailKey = loginEmailKey(email);
     const ipKey = loginIpKey(getClientIp(request));
 
-    if (checkLoginLock(emailKey, ipKey).locked) {
+    if ((await checkLoginLock(emailKey, ipKey)).locked) {
       return errorResponse(429, 'Too many attempts. Please try again later.');
     }
 
-    const user = usersRepo.findByEmail(email);
+    const user = await usersRepo.findByEmail(email);
     const valid = verifyPasswordOrDummy(password, user?.password_hash ?? null);
 
     if (!user || !valid) {
-      recordLoginFailure(emailKey, ipKey);
+      await recordLoginFailure(emailKey, ipKey);
       return errorResponse(401, 'Invalid email or password');
     }
 
-    recordLoginSuccess(emailKey);
-    const token = signToken(user.id);
+    await recordLoginSuccess(emailKey);
+    const token = await signToken(user.id);
     return { token, user: { id: user.id, email: user.email, name: user.name } };
   });
 }

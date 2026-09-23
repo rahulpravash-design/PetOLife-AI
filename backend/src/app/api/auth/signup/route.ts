@@ -14,14 +14,14 @@ export async function POST(request: Request) {
   return handleRoute(async () => {
     const { email, password, name } = await parseBody(request, schema);
 
-    if (usersRepo.findByEmail(email)) {
+    if (await usersRepo.findByEmail(email)) {
       // Generic message/status (matches validation-error shape) so this endpoint
       // can't be used to enumerate which emails already have accounts.
       return errorResponse(400, 'Unable to create account with the provided details.');
     }
 
-    const user = usersRepo.create(email, hashPassword(password), name);
-    const token = signToken(user.id);
+    const user = await usersRepo.create(email, hashPassword(password), name);
+    const token = await signToken(user.id);
     return { token, user };
   });
 }

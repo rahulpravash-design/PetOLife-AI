@@ -41,9 +41,9 @@ export async function POST(request: Request, { params }: Params) {
   let userId: string;
   let petId: string;
   try {
-    userId = requireUserId(request);
+    userId = await requireUserId(request);
     ({ id: petId } = await params);
-    requireOwnedPet(userId, petId);
+    await requireOwnedPet(userId, petId);
   } catch {
     return new Response('Unauthorized', { status: 401 });
   }
@@ -56,7 +56,7 @@ export async function POST(request: Request, { params }: Params) {
     );
   }
 
-  const records = recordsRepo.listByPet(petId);
+  const records = await recordsRepo.listByPet(petId);
   const facts = computeFacts(petId, records);
   const patterns = computePatterns(records);
 

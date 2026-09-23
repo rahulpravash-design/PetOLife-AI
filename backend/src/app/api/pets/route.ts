@@ -14,14 +14,14 @@ const createSchema = z.object({
 
 export async function GET(request: Request) {
   return handleRoute(async () => {
-    const userId = requireUserId(request);
+    const userId = await requireUserId(request);
     return petsRepo.listByUser(userId);
   });
 }
 
 export async function POST(request: Request) {
   return handleRoute(async () => {
-    const userId = requireUserId(request);
+    const userId = await requireUserId(request);
     const data = await parseBody(request, createSchema);
     return petsRepo.create(userId, data);
   });

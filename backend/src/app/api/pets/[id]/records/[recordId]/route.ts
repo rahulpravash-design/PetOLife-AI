@@ -29,7 +29,7 @@ type Params = { params: Promise<{ id: string; recordId: string }> };
 
 export async function GET(request: Request, { params }: Params) {
   return handleRoute(async () => {
-    const userId = requireUserId(request);
+    const userId = await requireUserId(request);
     const { id, recordId } = await params;
     return requireOwnedRecord(userId, id, recordId);
   });
@@ -37,9 +37,9 @@ export async function GET(request: Request, { params }: Params) {
 
 export async function PATCH(request: Request, { params }: Params) {
   return handleRoute(async () => {
-    const userId = requireUserId(request);
+    const userId = await requireUserId(request);
     const { id, recordId } = await params;
-    requireOwnedRecord(userId, id, recordId);
+    await requireOwnedRecord(userId, id, recordId);
     const data = await parseBody(request, updateSchema);
     return recordsRepo.update(recordId, data);
   });
@@ -47,10 +47,10 @@ export async function PATCH(request: Request, { params }: Params) {
 
 export async function DELETE(request: Request, { params }: Params) {
   return handleRoute(async () => {
-    const userId = requireUserId(request);
+    const userId = await requireUserId(request);
     const { id, recordId } = await params;
-    requireOwnedRecord(userId, id, recordId);
-    recordsRepo.remove(recordId);
+    await requireOwnedRecord(userId, id, recordId);
+    await recordsRepo.remove(recordId);
     return new Response(null, { status: 204 });
   });
 }

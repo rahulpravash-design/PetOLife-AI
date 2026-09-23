@@ -45,9 +45,9 @@ export function verifyPasswordOrDummy(password: string, hash: string | null): bo
   return hash !== null && matched;
 }
 
-export function signToken(userId: string): string {
+export async function signToken(userId: string): Promise<string> {
   const expiresAt = new Date(Date.now() + TOKEN_TTL_MS).toISOString();
-  const jti = sessionsRepo.create(userId, expiresAt);
+  const jti = await sessionsRepo.create(userId, expiresAt);
   return jwt.sign({ sub: userId, jti }, getSecret(), { expiresIn: TOKEN_TTL });
 }
 
@@ -74,12 +74,12 @@ function verifyToken(request: Request): { userId: string; jti: string } {
 
 // Like requireUserId, but also returns the session id (jti) - needed by the
 // logout route to know which session to revoke.
-export function requireSession(request: Request): { userId: string; jti: string } {
+export async function requireSession(request: Request): Promise<{ userId: string; jti: string }> {
   const { userId, jti } = verifyToken(request);
-  if (!sessionsRepo.isActive(jti)) throw new UnauthorizedError('Session expired or revoked');
+  if (!(await sessionsRepo.isActive(jti))) throw new UnauthorizedError('Session expired or revoked');
   return { userId, jti };
 }
 
-export function requireUserId(request: Request): string {
-  return requireSession(request).userId;
+export async function requireUserId(request: Request): Promise<string> {
+  return (await requireSession(request)).userId;
 }

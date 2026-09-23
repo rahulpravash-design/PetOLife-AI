@@ -32,65 +32,69 @@ function toRecord(row: RecordRow): HealthRecord {
 }
 
 export const recordsRepo = {
-  listByPet(petId: string): HealthRecord[] {
-    const rows = db
-      .prepare('SELECT * FROM health_records WHERE pet_id = ? ORDER BY date DESC')
-      .all(petId) as RecordRow[];
+  async listByPet(petId: string): Promise<HealthRecord[]> {
+    const rows = await db.all<RecordRow>(
+      'SELECT * FROM health_records WHERE pet_id = ? ORDER BY date DESC',
+      [petId],
+    );
     return rows.map(toRecord);
   },
 
-  findById(id: string): HealthRecord | null {
-    const row = db.prepare('SELECT * FROM health_records WHERE id = ?').get(id) as
-      | RecordRow
-      | undefined;
+  async findById(id: string): Promise<HealthRecord | null> {
+    const row = await db.get<RecordRow>('SELECT * FROM health_records WHERE id = ?', [id]);
     return row ? toRecord(row) : null;
   },
 
-  create(petId: string, data: Omit<HealthRecord, 'id' | 'petId' | 'createdAt'>): HealthRecord {
+  async create(
+    petId: string,
+    data: Omit<HealthRecord, 'id' | 'petId' | 'createdAt'>,
+  ): Promise<HealthRecord> {
     const id = randomUUID();
     const createdAt = new Date().toISOString();
-    db.prepare(
+    await db.run(
       `INSERT INTO health_records (id, pet_id, type, date, title, notes, value, unit, attachment_url, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run(
-      id,
-      petId,
-      data.type,
-      data.date,
-      data.title,
-      data.notes ?? null,
-      data.value ?? null,
-      data.unit ?? null,
-      data.attachmentUrl ?? null,
-      createdAt,
+      [
+        id,
+        petId,
+        data.type,
+        data.date,
+        data.title,
+        data.notes ?? null,
+        data.value ?? null,
+        data.unit ?? null,
+        data.attachmentUrl ?? null,
+        createdAt,
+      ],
     );
     return { id, petId, createdAt, ...data };
   },
 
-  update(
+  async update(
     id: string,
     data: Partial<Omit<HealthRecord, 'id' | 'petId' | 'createdAt'>>,
-  ): HealthRecord | null {
-    const existing = this.findById(id);
+  ): Promise<HealthRecord | null> {
+    const existing = await this.findById(id);
     if (!existing) return null;
     const merged = { ...existing, ...data };
-    db.prepare(
+    await db.run(
       `UPDATE health_records SET type = ?, date = ?, title = ?, notes = ?, value = ?, unit = ?, attachment_url = ?
        WHERE id = ?`,
-    ).run(
-      merged.type,
-      merged.date,
-      merged.title,
-      merged.notes ?? null,
-      merged.value ?? null,
-      merged.unit ?? null,
-      merged.attachmentUrl ?? null,
-      id,
+      [
+        merged.type,
+        merged.date,
+        merged.title,
+        merged.notes ?? null,
+        merged.value ?? null,
+        merged.unit ?? null,
+        merged.attachmentUrl ?? null,
+        id,
+      ],
     );
     return this.findById(id);
   },
 
-  remove(id: string): void {
-    db.prepare('DELETE FROM health_records WHERE id = ?').run(id);
+  async remove(id: string): Promise<void> {
+    await db.run('DELETE FROM health_records WHERE id = ?', [id]);
   },
 };

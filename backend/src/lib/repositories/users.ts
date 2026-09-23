@@ -16,23 +16,22 @@ function toUser(row: UserRow): User {
 }
 
 export const usersRepo = {
-  findByEmail(email: string): (UserRow & User) | null {
-    const row = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as
-      | UserRow
-      | undefined;
+  async findByEmail(email: string): Promise<(UserRow & User) | null> {
+    const row = await db.get<UserRow>('SELECT * FROM users WHERE email = ?', [email]);
     return row ? { ...row, ...toUser(row) } : null;
   },
 
-  findById(id: string): User | null {
-    const row = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as UserRow | undefined;
+  async findById(id: string): Promise<User | null> {
+    const row = await db.get<UserRow>('SELECT * FROM users WHERE id = ?', [id]);
     return row ? toUser(row) : null;
   },
 
-  create(email: string, passwordHash: string, name: string): User {
+  async create(email: string, passwordHash: string, name: string): Promise<User> {
     const id = randomUUID();
-    db.prepare(
+    await db.run(
       'INSERT INTO users (id, email, password_hash, name, created_at) VALUES (?, ?, ?, ?, ?)',
-    ).run(id, email, passwordHash, name, new Date().toISOString());
+      [id, email, passwordHash, name, new Date().toISOString()],
+    );
     return { id, email, name };
   },
 };

@@ -4,8 +4,8 @@ import { sessionsRepo } from '@/lib/repositories/sessions';
 
 export async function POST(request: Request) {
   return handleRoute(async () => {
-    const { jti } = requireSession(request);
-    sessionsRepo.revoke(jti);
+    const { jti } = await requireSession(request);
+    await sessionsRepo.revoke(jti);
     return new Response(null, { status: 204 });
   });
 }

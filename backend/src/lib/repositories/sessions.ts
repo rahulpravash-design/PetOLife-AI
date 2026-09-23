@@ -12,28 +12,32 @@ interface SessionRow {
 
 export const sessionsRepo = {
   // Creates a session row and returns its id, used as the JWT's `jti` claim.
-  create(userId: string, expiresAt: string): string {
+  async create(userId: string, expiresAt: string): Promise<string> {
     const id = randomUUID();
-    db.prepare(
-      'INSERT INTO sessions (id, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)',
-    ).run(id, userId, new Date().toISOString(), expiresAt);
+    await db.run('INSERT INTO sessions (id, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)', [
+      id,
+      userId,
+      new Date().toISOString(),
+      expiresAt,
+    ]);
     return id;
   },
 
-  isActive(jti: string): boolean {
-    const row = db.prepare('SELECT expires_at, revoked_at FROM sessions WHERE id = ?').get(jti) as
-      | Pick<SessionRow, 'expires_at' | 'revoked_at'>
-      | undefined;
+  async isActive(jti: string): Promise<boolean> {
+    const row = await db.get<Pick<SessionRow, 'expires_at' | 'revoked_at'>>(
+      'SELECT expires_at, revoked_at FROM sessions WHERE id = ?',
+      [jti],
+    );
     if (!row) return false;
     if (row.revoked_at) return false;
     if (new Date(row.expires_at).getTime() <= Date.now()) return false;
     return true;
   },
 
-  revoke(jti: string): void {
-    db.prepare('UPDATE sessions SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL').run(
+  async revoke(jti: string): Promise<void> {
+    await db.run('UPDATE sessions SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL', [
       new Date().toISOString(),
       jti,
-    );
+    ]);
   },
 };

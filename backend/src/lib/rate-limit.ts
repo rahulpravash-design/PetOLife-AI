@@ -30,16 +30,16 @@ export function loginIpKey(ip: string): string {
   return `login:ip:${ip}`;
 }
 
-function readLock(key: string, now: number): LockStatus {
-  const row = rateLimitsRepo.get(key);
+async function readLock(key: string, now: number): Promise<LockStatus> {
+  const row = await rateLimitsRepo.get(key);
   if (!row?.locked_until) return { locked: false, retryAfterSeconds: 0 };
   const lockedUntilMs = new Date(row.locked_until).getTime();
   if (lockedUntilMs <= now) return { locked: false, retryAfterSeconds: 0 };
   return { locked: true, retryAfterSeconds: Math.ceil((lockedUntilMs - now) / 1000) };
 }
 
-function bumpFailure(key: string, threshold: number, now: number): void {
-  const row = rateLimitsRepo.get(key);
+async function bumpFailure(key: string, threshold: number, now: number): Promise<void> {
+  const row = await rateLimitsRepo.get(key);
   const windowStartMs = row ? new Date(row.window_start).getTime() : now;
   const withinWindow = Boolean(row) && now - windowStartMs <= LOGIN_WINDOW_MS;
 
@@ -52,25 +52,25 @@ function bumpFailure(key: string, threshold: number, now: number): void {
     lockedUntil = new Date(now + LOGIN_BACKOFF_MS[idx]).toISOString();
   }
 
-  rateLimitsRepo.upsert(key, count, windowStart, lockedUntil);
+  await rateLimitsRepo.upsert(key, count, windowStart, lockedUntil);
 }
 
-export function checkLoginLock(emailKey: string, ipKey: string, now = Date.now()): LockStatus {
-  const emailLock = readLock(emailKey, now);
+export async function checkLoginLock(emailKey: string, ipKey: string, now = Date.now()): Promise<LockStatus> {
+  const emailLock = await readLock(emailKey, now);
   if (emailLock.locked) return emailLock;
   return readLock(ipKey, now);
 }
 
-export function recordLoginFailure(emailKey: string, ipKey: string, now = Date.now()): void {
-  bumpFailure(emailKey, LOGIN_EMAIL_THRESHOLD, now);
-  bumpFailure(ipKey, LOGIN_IP_THRESHOLD, now);
+export async function recordLoginFailure(emailKey: string, ipKey: string, now = Date.now()): Promise<void> {
+  await bumpFailure(emailKey, LOGIN_EMAIL_THRESHOLD, now);
+  await bumpFailure(ipKey, LOGIN_IP_THRESHOLD, now);
 }
 
 // Only the email bucket is cleared on success: a shared IP may still have
 // another account under active attack, so we don't want one unrelated
 // successful login to reset that IP's failure count.
-export function recordLoginSuccess(emailKey: string): void {
-  rateLimitsRepo.reset(emailKey);
+export async function recordLoginSuccess(emailKey: string): Promise<void> {
+  await rateLimitsRepo.reset(emailKey);
 }
 
 // --- Generic fixed-window throttle (Finding 3: AI/document extraction) --
@@ -84,13 +84,13 @@ export function extractUserKey(userId: string): string {
   return `extract:user:${userId}`;
 }
 
-export function checkAndConsumeThrottle(
+export async function checkAndConsumeThrottle(
   key: string,
   limit: number,
   windowMs: number,
   now = Date.now(),
-): LockStatus {
-  const row = rateLimitsRepo.get(key);
+): Promise<LockStatus> {
+  const row = await rateLimitsRepo.get(key);
   const windowStartMs = row ? new Date(row.window_start).getTime() : now;
   const withinWindow = Boolean(row) && now - windowStartMs <= windowMs;
 
@@ -103,10 +103,10 @@ export function checkAndConsumeThrottle(
       1,
       Math.ceil((windowStartResolvedMs + windowMs - now) / 1000),
     );
-    rateLimitsRepo.upsert(key, count, windowStart, new Date(windowStartResolvedMs + windowMs).toISOString());
+    await rateLimitsRepo.upsert(key, count, windowStart, new Date(windowStartResolvedMs + windowMs).toISOString());
     return { locked: true, retryAfterSeconds };
   }
 
-  rateLimitsRepo.upsert(key, count, windowStart, null);
+  await rateLimitsRepo.upsert(key, count, windowStart, null);
   return { locked: false, retryAfterSeconds: 0 };
 }

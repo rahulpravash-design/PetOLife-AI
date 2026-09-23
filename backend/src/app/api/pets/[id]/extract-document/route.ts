@@ -55,11 +55,11 @@ export async function POST(request: Request, { params }: Params) {
       return errorResponse(413, 'Document image is too large.');
     }
 
-    const userId = requireUserId(request);
+    const userId = await requireUserId(request);
     const { id } = await params;
-    requireOwnedPet(userId, id);
+    await requireOwnedPet(userId, id);
 
-    const throttle = checkAndConsumeThrottle(
+    const throttle = await checkAndConsumeThrottle(
       extractUserKey(userId),
       EXTRACT_THROTTLE_LIMIT,
       EXTRACT_THROTTLE_WINDOW_MS,

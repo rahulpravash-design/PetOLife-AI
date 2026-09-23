@@ -8,22 +8,21 @@ interface RateLimitRow {
 }
 
 export const rateLimitsRepo = {
-  get(key: string): RateLimitRow | null {
-    const row = db.prepare('SELECT * FROM rate_limit_state WHERE key = ?').get(key) as
-      | RateLimitRow
-      | undefined;
+  async get(key: string): Promise<RateLimitRow | null> {
+    const row = await db.get<RateLimitRow>('SELECT * FROM rate_limit_state WHERE key = ?', [key]);
     return row ?? null;
   },
 
-  upsert(key: string, count: number, windowStart: string, lockedUntil: string | null): void {
-    db.prepare(
+  async upsert(key: string, count: number, windowStart: string, lockedUntil: string | null): Promise<void> {
+    await db.run(
       `INSERT INTO rate_limit_state (key, count, window_start, locked_until)
        VALUES (?, ?, ?, ?)
        ON CONFLICT(key) DO UPDATE SET count = excluded.count, window_start = excluded.window_start, locked_until = excluded.locked_until`,
-    ).run(key, count, windowStart, lockedUntil);
+      [key, count, windowStart, lockedUntil],
+    );
   },
 
-  reset(key: string): void {
-    db.prepare('DELETE FROM rate_limit_state WHERE key = ?').run(key);
+  async reset(key: string): Promise<void> {
+    await db.run('DELETE FROM rate_limit_state WHERE key = ?', [key]);
   },
 };
