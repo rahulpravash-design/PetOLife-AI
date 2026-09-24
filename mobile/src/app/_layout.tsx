@@ -1,29 +1,40 @@
+import { ClerkProvider, useAuth } from '@clerk/expo';
+import { tokenCache } from '@clerk/expo/token-cache';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 
+import { CLERK_PUBLISHABLE_KEY } from '@/constants/config';
 import { queryClient } from '@/services/query-client';
-import { useAuthStore } from '@/store/auth-store';
 
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
+  if (!CLERK_PUBLISHABLE_KEY) {
+    throw new Error('Set EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY (see mobile/.env.example).');
+  }
+
+  // tokenCache persists Clerk's session credential in expo-secure-store
+  // (iOS Keychain / Android Keystore) so the user stays signed in across launches.
+  return (
+    <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY} tokenCache={tokenCache}>
+      <RootNavigator />
+    </ClerkProvider>
+  );
+}
+
+function RootNavigator() {
   const colorScheme = useColorScheme();
-  const isHydrated = useAuthStore((s) => s.isHydrated);
-  const isAuthed = useAuthStore((s) => Boolean(s.token));
-  const hydrate = useAuthStore((s) => s.hydrate);
+  const { isLoaded, isSignedIn } = useAuth();
+  const isAuthed = Boolean(isSignedIn);
 
   useEffect(() => {
-    hydrate();
-  }, [hydrate]);
+    if (isLoaded) SplashScreen.hideAsync();
+  }, [isLoaded]);
 
-  useEffect(() => {
-    if (isHydrated) SplashScreen.hideAsync();
-  }, [isHydrated]);
-
-  if (!isHydrated) return null;
+  if (!isLoaded) return null;
 
   return (
     <QueryClientProvider client={queryClient}>

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { errorResponse, getClientIp, handleRoute, parseBody } from '@/lib/api-utils';
-import { signToken, verifyPasswordOrDummy } from '@/lib/auth';
+import { isLegacyAuthEnabled, signToken, verifyPasswordOrDummy } from '@/lib/auth';
 import {
   checkLoginLock,
   loginEmailKey,
@@ -18,6 +18,10 @@ const schema = z.object({
 
 export async function POST(request: Request) {
   return handleRoute(async () => {
+    // Checked before anything else (no body parse, no rate-limit writes) so a
+    // production deployment exposes no password-login surface at all.
+    if (!isLegacyAuthEnabled()) return errorResponse(404, 'Not found');
+
     const { email, password } = await parseBody(request, schema);
 
     const emailKey = loginEmailKey(email);

@@ -1,4 +1,5 @@
-import { Link, router } from 'expo-router';
+import { useSignUp } from '@clerk/expo';
+import { Link } from 'expo-router';
 import { useState } from 'react';
 import {
   ActivityIndicator,
@@ -12,30 +13,67 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { authService } from '@/services/auth';
-import { useAuthStore } from '@/store/auth-store';
-
+// Clerk verifies the email with an emailed code before it creates the session;
+// the backend only ever trusts a verified primary email.
 export default function SignupScreen() {
-  const signIn = useAuthStore((s) => s.signIn);
+  const { signUp } = useSignUp();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [code, setCode] = useState('');
+  const [verifying, setVerifying] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function onSubmit() {
-    setError(null);
-    setLoading(true);
-    try {
-      const { token, user } = await authService.signup(email.trim(), password, name.trim());
-      await signIn(token, user);
-      router.replace('/(tabs)');
-    } catch {
-      setError('Could not create your account. Try a different email.');
-    } finally {
-      setLoading(false);
-    }
+  async function run(action: () => Promise<void>, failure: string) {
+  setError(null);
+  setLoading(true);
+
+  try {
+    await action();
+  } catch (err: any) {
+    console.error('SIGNUP ERROR:', err);
+
+    const clerkError =
+      err?.errors?.[0]?.longMessage ||
+      err?.errors?.[0]?.message ||
+      err?.message ||
+      failure;
+
+    console.error('CLERK ERROR MESSAGE:', clerkError);
+
+    setError(clerkError);
+  } finally {
+    setLoading(false);
   }
+}
+
+  const sendCode = async () => {
+    const { error: sendError } = await signUp.verifications.sendEmailCode();
+    if (sendError) throw sendError;
+  };
+
+  const onSubmit = () =>
+    run(async () => {
+      const { error: createError } = await signUp.password({
+  emailAddress: email.trim(),
+  password,
+});
+      if (createError) throw createError;
+      await sendCode();
+      setVerifying(true);
+    }, 'Could not create your account. Try a different email or a stronger password.');
+
+  const onVerify = () =>
+    run(async () => {
+      const { error: verifyError } = await signUp.verifications.verifyEmailCode({
+        code: code.trim(),
+      });
+      if (verifyError) throw verifyError;
+      if (signUp.status !== 'complete') throw new Error('Sign-up not complete');
+      const { error: finalizeError } = await signUp.finalize();
+      if (finalizeError) throw finalizeError;
+    }, 'That code did not work. Try again or request a new one.');
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -43,41 +81,64 @@ export default function SignupScreen() {
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.content}>
-          <Text style={styles.title}>Create account</Text>
+          <Text style={styles.title}>{verifying ? 'Verify your email' : 'Create account'}</Text>
 
-          <TextInput style={styles.input} placeholder="Name" value={name} onChangeText={setName} />
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            autoCapitalize="none"
-            keyboardType="email-address"
-            value={email}
-            onChangeText={setEmail}
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            secureTextEntry
-            value={password}
-            onChangeText={setPassword}
-          />
+          {verifying ? (
+            <TextInput
+              style={styles.input}
+              placeholder="Verification code"
+              keyboardType="number-pad"
+              value={code}
+              onChangeText={setCode}
+            />
+          ) : (
+            <>
+              <TextInput
+                style={styles.input}
+                placeholder="Name"
+                value={name}
+                onChangeText={setName}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Email"
+                autoCapitalize="none"
+                keyboardType="email-address"
+                value={email}
+                onChangeText={setEmail}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Password"
+                secureTextEntry
+                value={password}
+                onChangeText={setPassword}
+              />
+            </>
+          )}
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
           <Pressable
             style={[styles.button, loading && styles.buttonDisabled]}
-            onPress={onSubmit}
-            disabled={loading || !email || !password || !name}>
+            onPress={verifying ? onVerify : onSubmit}
+            disabled={loading || (verifying ? !code : !email || !password || !name)}>
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.buttonText}>Sign Up</Text>
+              <Text style={styles.buttonText}>{verifying ? 'Verify' : 'Sign Up'}</Text>
             )}
           </Pressable>
 
-          <Link href="/(auth)/login" style={styles.link}>
-            <Text>Already have an account? Sign in</Text>
-          </Link>
+          {verifying ? (
+            <Pressable style={styles.link} onPress={() => run(sendCode, 'Could not send a new code.')}>
+              <Text>Send a new code</Text>
+            </Pressable>
+          ) : (
+            <Link href="/(auth)/login" style={styles.link}>
+              <Text>Already have an account? Sign in</Text>
+            </Link>
+          )}
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

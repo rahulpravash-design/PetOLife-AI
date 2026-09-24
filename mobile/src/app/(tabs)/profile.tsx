@@ -1,31 +1,30 @@
+import { useAuth, useUser } from '@clerk/expo';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { authService } from '@/services/auth';
-import { useAuthStore } from '@/store/auth-store';
+import { queryClient } from '@/services/query-client';
 
 export default function ProfileScreen() {
-  const user = useAuthStore((s) => s.user);
-  const signOut = useAuthStore((s) => s.signOut);
+  const { user } = useUser();
+  const { signOut } = useAuth();
 
   const handleSignOut = async () => {
-    // Best-effort: revoke the session server-side, but still clear the local
-    // token even if the request fails (offline, expired token, etc.) so the
-    // user is never stuck unable to log out on their own device.
+    // Ends the Clerk session (the source of truth for who is signed in) and
+    // drops cached API data so the next person on this device never sees it.
+    // The backend has nothing to revoke: Clerk session tokens expire on their own.
     try {
-      await authService.logout();
-    } catch {
-      // ignore - local sign-out below still proceeds
+      await signOut();
+    } finally {
+      queryClient.clear();
     }
-    await signOut();
   };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <Text style={styles.title}>Profile</Text>
       <View style={styles.card}>
-        <Text style={styles.name}>{user?.name ?? 'PetOLife user'}</Text>
-        <Text style={styles.email}>{user?.email}</Text>
+        <Text style={styles.name}>{user?.fullName ?? 'PetOLife user'}</Text>
+        <Text style={styles.email}>{user?.primaryEmailAddress?.emailAddress}</Text>
       </View>
       <Pressable style={styles.signOutButton} onPress={handleSignOut}>
         <Text style={styles.signOutText}>Sign Out</Text>

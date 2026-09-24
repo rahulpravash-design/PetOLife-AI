@@ -1,5 +1,5 @@
 import { API_BASE_URL } from '@/constants/config';
-import { useAuthStore } from '@/store/auth-store';
+import { getAuthToken } from '@/services/auth-token';
 
 export class ApiError extends Error {
   constructor(
@@ -12,7 +12,7 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = useAuthStore.getState().token;
+  const token = await getAuthToken();
 
   const res = await fetch(`${API_BASE_URL}${path}`, {
     ...init,

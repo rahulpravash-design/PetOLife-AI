@@ -82,6 +82,15 @@ function openRawDb(): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
   `);
 
+  // Mirrors migrations/002_clerk_user_id.sql. SQLite has no
+  // `ADD COLUMN IF NOT EXISTS`, so check the table first; existing dev
+  // databases pick the column up here without a manual migration.
+  const userColumns = raw.prepare('PRAGMA table_info(users)').all() as { name: string }[];
+  if (!userColumns.some((c) => c.name === 'clerk_user_id')) {
+    raw.exec('ALTER TABLE users ADD COLUMN clerk_user_id TEXT');
+  }
+  raw.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_clerk_user_id ON users(clerk_user_id)');
+
   return raw;
 }
 

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { errorResponse, handleRoute, parseBody } from '@/lib/api-utils';
-import { hashPassword, signToken } from '@/lib/auth';
+import { hashPassword, isLegacyAuthEnabled, signToken } from '@/lib/auth';
 import { usersRepo } from '@/lib/repositories/users';
 
 const schema = z.object({
@@ -12,6 +12,10 @@ const schema = z.object({
 
 export async function POST(request: Request) {
   return handleRoute(async () => {
+    // Password signup is a legacy/dev path; in production accounts are created
+    // through Clerk and provisioned on first login.
+    if (!isLegacyAuthEnabled()) return errorResponse(404, 'Not found');
+
     const { email, password, name } = await parseBody(request, schema);
 
     if (await usersRepo.findByEmail(email)) {

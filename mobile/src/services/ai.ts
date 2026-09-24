@@ -1,6 +1,6 @@
 import { API_BASE_URL } from '@/constants/config';
 import { api } from '@/services/api';
-import { useAuthStore } from '@/store/auth-store';
+import { getAuthToken } from '@/services/auth-token';
 import type { HealthSummary } from '@/types';
 
 export const aiService = {
@@ -15,7 +15,7 @@ export const aiService = {
   // Streaming chat: caller consumes the ReadableStream directly (fetch-based,
   // since React Native's XHR-backed fetch does not support EventSource).
   chatStream: async (petId: string, message: string, signal?: AbortSignal) => {
-    const token = useAuthStore.getState().token;
+    const token = await getAuthToken();
     const res = await fetch(`${API_BASE_URL}/api/pets/${petId}/chat`, {
       method: 'POST',
       headers: {
