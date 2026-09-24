@@ -239,3 +239,29 @@ Each step keeps Clerk auth and the database architecture unchanged, and is commi
 8. **Documentation and final QA:** the docs set, `FINAL-STATUS.md`, and a full manual/device QA pass.
 
 Legacy-auth removal and account deletion need a decision from the owner before they are scheduled.
+
+---
+
+## Update after hardening (2026-09-24)
+
+This document is the **baseline audit** and is kept as written. Since then (commits `4ff412c`, `c018fc9`, `8be84fc`):
+
+| Finding | Status |
+|---|---|
+| Backend build fails without `DATABASE_URL` | Fixed (lazy DB open) |
+| S1 spoofable client IP | Fixed (trusted only on Vercel / non-production / `TRUST_PROXY_HEADERS=true`) |
+| S2 no limits on chat and summary | Fixed (per-user 429) |
+| S3 prompt injection / no output filtering | Partly fixed (summary output guard; chat stream still unchecked) |
+| S4 unvalidated `mimeType` | Fixed (allowlist) |
+| S5 no length caps, dates, URLs | Fixed |
+| S6 `/api/health` driver disclosure | Fixed |
+| S7 security headers | Added (verified in build manifest only) |
+| Chat route 500 on bad body, errors mapped to 401 | Fixed |
+| No LLM timeouts | Fixed |
+| Analytics "steadily increasing" for equal weights | Fixed |
+| Tests used dev database; no typecheck script | Fixed |
+| Mobile: signup name dropped, unhandled mutation errors, NaN value, no 401/timeout handling, chat first-pet only, localhost fallback in release, no delete UI | Fixed |
+| S8 npm audit advisories, S9 demo credentials | Unchanged (accepted / dev only) |
+| Legacy auth, account deletion, password reset, edit screens, remote push, mobile tests, CI, deployment, Android release, package id, Postgres tests, indexes/constraints, pagination | **Open** |
+
+See [FINAL-STATUS.md](./FINAL-STATUS.md) for the current state.

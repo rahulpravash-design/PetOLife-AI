@@ -1,3 +1,5 @@
+> **Historical document.** This plan describes the original migration and no longer matches the code: authentication is now Clerk (not custom JWT), the database layer supports Postgres, and several libraries named here (expo-camera, document-picker, zustand, @vercel/postgres) are not used. For the current design see [ARCHITECTURE.md](./ARCHITECTURE.md).
+
 # PetOLife — Mobile Migration Plan
 
 > Status (2026-09-23): all 19 phases implemented and verified (typecheck, lint, unit tests,
