@@ -9,7 +9,8 @@ declare global {
 }
 
 function openRawDb(): Database.Database {
-  const dbPath = path.join(process.cwd(), 'data', 'petolife.db');
+  // SQLITE_PATH lets the test run use a throwaway file instead of dev data.
+  const dbPath = process.env.SQLITE_PATH || path.join(process.cwd(), 'data', 'petolife.db');
 
   // Next.js dev server hot-reloads modules; cache the connection on `global`
   // so repeated route reloads don't open a new file handle every time.

@@ -59,10 +59,11 @@ export function computePatterns(records: HealthRecord[]): Pattern[] {
     const values = weights.map((r) => r.value as number);
     const increasing = values.every((v, i) => i === 0 || v >= values[i - 1]);
     const decreasing = values.every((v, i) => i === 0 || v <= values[i - 1]);
-    if (increasing || decreasing) {
+    // All-equal values satisfy both checks; that's "stable", not a trend.
+    if (increasing !== decreasing) {
       patterns.push({
         id: randomUUID(),
-        description: `Weight has been steadily ${increasing ? 'increasing' : 'decreasing'} across the last ${values.length} logs`,
+        description: `Weight has been steadily ${increasing ? 'increasing' : 'decreasing'} across ${values.length} logs`,
         sourceRecordIds: weights.map((r) => r.id),
         confidence: values.length >= 4 ? 'high' : 'medium',
       });

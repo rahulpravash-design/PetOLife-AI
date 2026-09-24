@@ -4,13 +4,14 @@ import { handleRoute, parseBody } from '@/lib/api-utils';
 import { requireUserId } from '@/lib/auth';
 import { requireOwnedPet } from '@/lib/authorize';
 import { petsRepo } from '@/lib/repositories/pets';
+import { dateString, httpUrl, nameText } from '@/lib/validation';
 
 const updateSchema = z.object({
-  name: z.string().min(1).optional(),
+  name: nameText.optional(),
   species: z.enum(['dog', 'cat', 'other']).optional(),
-  breed: z.string().optional(),
-  birthDate: z.string().optional(),
-  photoUrl: z.string().optional(),
+  breed: nameText.optional(),
+  birthDate: dateString.optional(),
+  photoUrl: httpUrl.optional(),
 });
 
 type Params = { params: Promise<{ id: string }> };

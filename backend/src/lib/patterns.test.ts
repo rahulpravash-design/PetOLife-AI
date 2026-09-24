@@ -73,4 +73,13 @@ describe('computePatterns', () => {
     const patterns = computePatterns(records);
     expect(patterns.some((p) => p.description.includes('Weight has been steadily'))).toBe(false);
   });
+
+  it('does not call an unchanged (all-equal) weight series a trend', () => {
+    const records = [
+      record({ id: 'a', type: 'weight', value: 10, date: '2026-01-01T00:00:00.000Z' }),
+      record({ id: 'b', type: 'weight', value: 10, date: '2026-02-01T00:00:00.000Z' }),
+      record({ id: 'c', type: 'weight', value: 10, date: '2026-03-01T00:00:00.000Z' }),
+    ];
+    expect(computePatterns(records).some((p) => p.description.includes('Weight has been steadily'))).toBe(false);
+  });
 });

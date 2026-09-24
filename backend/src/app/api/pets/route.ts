@@ -3,13 +3,14 @@ import { z } from 'zod';
 import { handleRoute, parseBody } from '@/lib/api-utils';
 import { requireUserId } from '@/lib/auth';
 import { petsRepo } from '@/lib/repositories/pets';
+import { dateString, httpUrl, nameText } from '@/lib/validation';
 
 const createSchema = z.object({
-  name: z.string().min(1),
+  name: nameText,
   species: z.enum(['dog', 'cat', 'other']),
-  breed: z.string().optional(),
-  birthDate: z.string().optional(),
-  photoUrl: z.string().optional(),
+  breed: nameText.optional(),
+  birthDate: dateString.optional(),
+  photoUrl: httpUrl.optional(),
 });
 
 export async function GET(request: Request) {

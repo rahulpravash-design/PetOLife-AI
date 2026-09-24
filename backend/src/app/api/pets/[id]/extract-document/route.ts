@@ -5,16 +5,10 @@ import { errorResponse, handleRoute, parseBody } from '@/lib/api-utils';
 import { requireUserId } from '@/lib/auth';
 import { requireOwnedPet } from '@/lib/authorize';
 import { checkAndConsumeThrottle, extractUserKey } from '@/lib/rate-limit';
+import { RECORD_TYPES } from '@/lib/validation';
 
-const RECORD_TYPES = [
-  'weight',
-  'vaccination',
-  'medication',
-  'vet_visit',
-  'symptom',
-  'lab_result',
-  'note',
-] as const;
+const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic'] as const;
+const EXTRACT_TIMEOUT_MS = 45_000;
 
 // Caps the decoded image size; base64 inflates raw bytes by ~4/3, so this
 // comfortably covers a typical phone photo of a document.
@@ -27,7 +21,7 @@ const EXTRACT_THROTTLE_WINDOW_MS = 5 * 60 * 1000;
 
 const requestSchema = z.object({
   imageBase64: z.string().min(1).max(MAX_BASE64_CHARS, 'Image is too large'),
-  mimeType: z.string().default('image/jpeg'),
+  mimeType: z.enum(ALLOWED_MIME_TYPES).default('image/jpeg'),
 });
 
 const extractionSchema = z.object({
@@ -77,6 +71,7 @@ export async function POST(request: Request, { params }: Params) {
     const { object } = await generateObject({
       model: 'openai/gpt-4o-mini',
       schema: extractionSchema,
+      abortSignal: AbortSignal.timeout(EXTRACT_TIMEOUT_MS),
       messages: [
         {
           role: 'user',

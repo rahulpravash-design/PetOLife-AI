@@ -1,3 +1,4 @@
+import { RateLimitError } from '@/lib/api-utils';
 import { rateLimitsRepo } from '@/lib/repositories/rate-limits';
 
 export interface LockStatus {
@@ -82,6 +83,25 @@ export async function recordLoginSuccess(emailKey: string): Promise<void> {
 
 export function extractUserKey(userId: string): string {
   return `extract:user:${userId}`;
+}
+
+// Per-user, per-feature key so each expensive endpoint has its own budget.
+export function userThrottleKey(scope: string, userId: string): string {
+  return `${scope}:user:${userId}`;
+}
+
+// Consumes one unit of the user's budget for `scope` and throws a 429
+// (RateLimitError, handled by handleRoute with a Retry-After header) once the
+// window's limit is exceeded.
+export async function enforceUserThrottle(
+  scope: string,
+  userId: string,
+  limit: number,
+  windowMs: number,
+  message: string,
+): Promise<void> {
+  const status = await checkAndConsumeThrottle(userThrottleKey(scope, userId), limit, windowMs);
+  if (status.locked) throw new RateLimitError(message, status.retryAfterSeconds);
 }
 
 export async function checkAndConsumeThrottle(

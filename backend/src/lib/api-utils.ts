@@ -15,6 +15,12 @@ export async function handleRoute<T>(fn: () => Promise<T>): Promise<Response> {
     if (err instanceof UnauthorizedError) return errorResponse(401, err.message);
     if (err instanceof ValidationError) return errorResponse(400, err.message);
     if (err instanceof NotFoundError) return errorResponse(404, err.message);
+    if (err instanceof RateLimitError) {
+      return NextResponse.json(
+        { error: err.message },
+        { status: 429, headers: { 'Retry-After': String(err.retryAfterSeconds) } },
+      );
+    }
     console.error(err);
     return errorResponse(500, 'Internal server error');
   }
@@ -22,6 +28,16 @@ export async function handleRoute<T>(fn: () => Promise<T>): Promise<Response> {
 
 export class ValidationError extends Error {}
 export class NotFoundError extends Error {}
+
+export class RateLimitError extends Error {
+  constructor(
+    message: string,
+    public retryAfterSeconds: number,
+  ) {
+    super(message);
+    this.name = 'RateLimitError';
+  }
+}
 
 export async function parseBody<T>(request: Request, schema: ZodType<T>): Promise<T> {
   const json = await request.json().catch(() => null);
@@ -32,11 +48,28 @@ export async function parseBody<T>(request: Request, schema: ZodType<T>): Promis
   return result.data;
 }
 
-// Local dev has no reverse proxy, so every request falls back to the same
-// 'unknown' bucket - that's expected here. In a real deployment (Vercel or
-// any proxy that sets x-forwarded-for) this resolves to the real client IP.
+// x-forwarded-for / x-real-ip are plain request headers: a client can send any
+// value, so they are only believable when a proxy we control sets or appends to
+// them. They are trusted when running on Vercel (which overwrites them), when
+// TRUST_PROXY_HEADERS=true is set explicitly (own reverse proxy / load balancer
+// that appends the real peer address), and outside production (local dev has
+// no proxy, so the header is normally absent anyway). Otherwise every request
+// shares the 'unknown' bucket rather than letting callers pick their own IP
+// and dodge per-IP limits.
+function trustProxyHeaders(): boolean {
+  if (process.env.TRUST_PROXY_HEADERS === 'true') return true;
+  if (process.env.TRUST_PROXY_HEADERS === 'false') return false;
+  return Boolean(process.env.VERCEL) || process.env.NODE_ENV !== 'production';
+}
+
 export function getClientIp(request: Request): string {
+  if (!trustProxyHeaders()) return 'unknown';
+  // The LAST entry is the one appended by the nearest trusted proxy; earlier
+  // entries are whatever the client claimed.
   const forwarded = request.headers.get('x-forwarded-for');
-  if (forwarded) return forwarded.split(',')[0].trim();
-  return request.headers.get('x-real-ip') ?? 'unknown';
+  if (forwarded) {
+    const hops = forwarded.split(',').map((h) => h.trim()).filter(Boolean);
+    if (hops.length) return hops[hops.length - 1];
+  }
+  return request.headers.get('x-real-ip')?.trim() || 'unknown';
 }

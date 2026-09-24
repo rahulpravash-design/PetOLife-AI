@@ -4,11 +4,12 @@ import { handleRoute, parseBody } from '@/lib/api-utils';
 import { requireUserId } from '@/lib/auth';
 import { requireOwnedReminder } from '@/lib/authorize';
 import { remindersRepo } from '@/lib/repositories/reminders';
+import { dateString, notesText, titleText } from '@/lib/validation';
 
 const updateSchema = z.object({
-  title: z.string().min(1).optional(),
-  dueDate: z.string().min(1).optional(),
-  notes: z.string().optional(),
+  title: titleText.optional(),
+  dueDate: dateString.optional(),
+  notes: notesText.optional(),
   isDone: z.boolean().optional(),
 });
 

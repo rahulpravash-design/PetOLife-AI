@@ -4,25 +4,24 @@ import { handleRoute, parseBody } from '@/lib/api-utils';
 import { requireUserId } from '@/lib/auth';
 import { requireOwnedPet } from '@/lib/authorize';
 import { recordsRepo } from '@/lib/repositories/records';
-
-const RECORD_TYPES = [
-  'weight',
-  'vaccination',
-  'medication',
-  'vet_visit',
-  'symptom',
-  'lab_result',
-  'note',
-] as const;
+import {
+  RECORD_TYPES,
+  dateString,
+  httpUrl,
+  measurement,
+  notesText,
+  titleText,
+  unitText,
+} from '@/lib/validation';
 
 const createSchema = z.object({
   type: z.enum(RECORD_TYPES),
-  date: z.string().min(1),
-  title: z.string().min(1),
-  notes: z.string().optional(),
-  value: z.number().optional(),
-  unit: z.string().optional(),
-  attachmentUrl: z.string().optional(),
+  date: dateString,
+  title: titleText,
+  notes: notesText.optional(),
+  value: measurement.optional(),
+  unit: unitText.optional(),
+  attachmentUrl: httpUrl.optional(),
 });
 
 type Params = { params: Promise<{ id: string }> };

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { db, dbDriver } from '@/lib/db';
+import { db } from '@/lib/db';
 
 export async function GET() {
   try {
@@ -8,7 +8,7 @@ export async function GET() {
     return NextResponse.json({
       status: 'ok',
       service: 'petolife-backend',
-      database: { driver: dbDriver, connected: true },
+      database: { connected: true },
     });
   } catch (err) {
     console.error('Health check: database query failed', err);
@@ -16,7 +16,7 @@ export async function GET() {
       {
         status: 'error',
         service: 'petolife-backend',
-        database: { driver: dbDriver, connected: false },
+        database: { connected: false },
       },
       { status: 503 },
     );
