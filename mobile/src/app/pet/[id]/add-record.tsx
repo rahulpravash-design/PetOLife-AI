@@ -2,6 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -9,8 +10,10 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 import { useCreateHealthRecord } from '@/hooks/use-records';
+import { getErrorMessage } from '@/services/errors';
 import type { HealthRecordType } from '@/types';
 
 const TYPES: HealthRecordType[] = [
@@ -45,21 +48,46 @@ export default function AddRecordScreen() {
   const [value, setValue] = useState(draftValue ?? '');
   const [unit, setUnit] = useState(draftUnit ?? '');
   const [notes, setNotes] = useState(draftNotes ?? '');
+  // A scanned document supplies its own date when it could be read; otherwise
+  // default to today. Either way the user can change it before saving.
+  const [date, setDate] = useState(
+    draftDate && !Number.isNaN(Date.parse(draftDate)) ? new Date(draftDate) : new Date(),
+  );
+  const [showPicker, setShowPicker] = useState(Platform.OS === 'ios');
+  const [error, setError] = useState<string | null>(null);
+
+  const hasValue = type === 'weight' || type === 'lab_result';
 
   async function onSave() {
-    await createRecord.mutateAsync({
-      type,
-      title: title.trim(),
-      date: draftDate && !Number.isNaN(Date.parse(draftDate)) ? draftDate : new Date().toISOString(),
-      value: value ? Number(value) : undefined,
-      unit: unit.trim() || undefined,
-      notes: notes.trim() || undefined,
-    });
-    router.back();
+    setError(null);
+
+    let numericValue: number | undefined;
+    if (hasValue && value.trim()) {
+      // Accept a decimal comma ("12,5") as typed on many keyboards.
+      numericValue = Number(value.trim().replace(',', '.'));
+      if (!Number.isFinite(numericValue)) {
+        setError('Value must be a number, for example 12.5');
+        return;
+      }
+    }
+
+    try {
+      await createRecord.mutateAsync({
+        type,
+        title: title.trim(),
+        date: date.toISOString(),
+        value: numericValue,
+        unit: hasValue ? unit.trim() || undefined : undefined,
+        notes: notes.trim() || undefined,
+      });
+      router.back();
+    } catch (err) {
+      setError(getErrorMessage(err, "Couldn't save the record. Please try again."));
+    }
   }
 
   return (
-    <ScrollView style={styles.safe} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.safe} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       {isFromScan ? (
         <View style={styles.scanBanner}>
           <Text style={styles.scanBannerText}>
@@ -84,9 +112,37 @@ export default function AddRecordScreen() {
       </View>
 
       <Text style={styles.label}>Title</Text>
-      <TextInput style={styles.input} value={title} onChangeText={setTitle} placeholder="e.g. Annual checkup" />
+      <TextInput
+        style={styles.input}
+        value={title}
+        onChangeText={setTitle}
+        placeholder="e.g. Annual checkup"
+        maxLength={200}
+        accessibilityLabel="Record title"
+      />
 
-      {type === 'weight' || type === 'lab_result' ? (
+      <Text style={styles.label}>Date</Text>
+      {Platform.OS === 'android' && !showPicker ? (
+        <Pressable
+          style={styles.input}
+          onPress={() => setShowPicker(true)}
+          accessibilityRole="button"
+          accessibilityLabel={`Record date, ${date.toLocaleDateString()}. Tap to change`}>
+          <Text>{date.toLocaleDateString()}</Text>
+        </Pressable>
+      ) : null}
+      {showPicker ? (
+        <DateTimePicker
+          value={date}
+          mode="date"
+          onChange={(_, picked) => {
+            if (Platform.OS === 'android') setShowPicker(false);
+            if (picked) setDate(picked);
+          }}
+        />
+      ) : null}
+
+      {hasValue ? (
         <View style={styles.row}>
           <View style={styles.flex1}>
             <Text style={styles.label}>Value</Text>
@@ -112,9 +168,18 @@ export default function AddRecordScreen() {
         onChangeText={setNotes}
         multiline
         placeholder="Optional details"
+        maxLength={2000}
+        accessibilityLabel="Notes"
       />
 
+      {error ? (
+        <Text style={styles.error} accessibilityRole="alert">
+          {error}
+        </Text>
+      ) : null}
+
       <Pressable
+        accessibilityRole="button"
         style={[styles.saveButton, (!title.trim() || createRecord.isPending) && styles.saveButtonDisabled]}
         onPress={onSave}
         disabled={!title.trim() || createRecord.isPending}>
@@ -143,6 +208,7 @@ const styles = StyleSheet.create({
   typeChipActive: { backgroundColor: '#208AEF' },
   typeChipText: { fontSize: 13, color: '#444', textTransform: 'capitalize' },
   typeChipTextActive: { color: '#fff', fontWeight: '600' },
+  error: { color: '#d33', fontSize: 14, marginTop: 12 },
   saveButton: { backgroundColor: '#208AEF', borderRadius: 10, paddingVertical: 14, alignItems: 'center', marginTop: 28 },
   saveButtonDisabled: { opacity: 0.5 },
   saveButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },

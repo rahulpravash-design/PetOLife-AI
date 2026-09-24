@@ -28,3 +28,11 @@ export function useToggleReminder(petId: string) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['pets', petId, 'reminders'] }),
   });
 }
+
+export function useDeleteReminder(petId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (reminderId: string) => remindersService.remove(petId, reminderId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['pets', petId, 'reminders'] }),
+  });
+}

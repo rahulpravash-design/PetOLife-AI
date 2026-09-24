@@ -1,7 +1,11 @@
 import { API_BASE_URL } from '@/constants/config';
-import { api } from '@/services/api';
+import { ApiError, api, fetchWithTimeout } from '@/services/api';
 import { getAuthToken } from '@/services/auth-token';
 import type { HealthSummary } from '@/types';
+
+// Time allowed to receive the response headers (i.e. for the stream to start).
+// Once it is flowing, the caller's AbortSignal is the way to stop it.
+const CHAT_START_TIMEOUT_MS = 30_000;
 
 export const aiService = {
   getSummary: (petId: string, rangeStart?: string, rangeEnd?: string) => {
@@ -14,20 +18,26 @@ export const aiService = {
 
   // Streaming chat: caller consumes the ReadableStream directly (fetch-based,
   // since React Native's XHR-backed fetch does not support EventSource).
+  // Failures throw ApiError so callers can use getErrorMessage().
   chatStream: async (petId: string, message: string, signal?: AbortSignal) => {
     const token = await getAuthToken();
-    const res = await fetch(`${API_BASE_URL}/api/pets/${petId}/chat`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    const res = await fetchWithTimeout(
+      `${API_BASE_URL}/api/pets/${petId}/chat`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ message }),
+        signal,
       },
-      body: JSON.stringify({ message }),
-      signal,
-    });
-    if (!res.ok || !res.body) {
-      throw new Error(`Chat request failed: ${res.status}`);
+      CHAT_START_TIMEOUT_MS,
+    );
+    if (!res.ok) {
+      throw new ApiError(res.status, await res.text().catch(() => res.statusText));
     }
+    if (!res.body) throw new ApiError(0, 'network');
     return res.body;
   },
 };

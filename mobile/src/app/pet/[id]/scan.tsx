@@ -5,6 +5,16 @@ import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'rea
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { documentsService } from '@/services/documents';
+import { getErrorMessage } from '@/services/errors';
+
+// The backend accepts only these image types. Some Android pickers report
+// 'image/jpg' or omit the type, so normalise instead of failing the upload.
+const ACCEPTED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']);
+function normalizeMime(mime?: string | null): string {
+  const m = mime?.toLowerCase();
+  if (m === 'image/jpg') return 'image/jpeg';
+  return m && ACCEPTED_MIME.has(m) ? m : 'image/jpeg';
+}
 
 export default function ScanDocumentScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -39,7 +49,7 @@ export default function ScanDocumentScreen() {
 
     setExtracting(true);
     try {
-      const draft = await documentsService.extract(id, asset.base64, asset.mimeType ?? 'image/jpeg');
+      const draft = await documentsService.extract(id, asset.base64, normalizeMime(asset.mimeType));
       router.replace({
         pathname: '/pet/[id]/add-record',
         params: {
@@ -53,8 +63,10 @@ export default function ScanDocumentScreen() {
           draftConfidence: draft.confidence,
         },
       });
-    } catch {
-      setError('Could not extract details from this document. You can still add the record manually.');
+    } catch (err) {
+      setError(
+        `${getErrorMessage(err, 'Could not extract details from this document.')} You can still add the record manually.`,
+      );
     } finally {
       setExtracting(false);
     }

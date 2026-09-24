@@ -13,6 +13,19 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+type ClerkErrorLike = { errors?: { code?: string; longMessage?: string; message?: string }[]; message?: string };
+
+function hasErrorCode(err: unknown, code: string): boolean {
+  return Boolean((err as ClerkErrorLike)?.errors?.some((e) => e.code === code));
+}
+
+// Clerk's own messages are written for end users ("That email address is
+// taken."), so they're shown as-is; anything else falls back to `fallback`.
+function clerkErrorMessage(err: unknown, fallback: string): string {
+  const e = err as ClerkErrorLike | null;
+  return e?.errors?.[0]?.longMessage || e?.errors?.[0]?.message || fallback;
+}
+
 // Clerk verifies the email with an emailed code before it creates the session;
 // the backend only ever trusts a verified primary email.
 export default function SignupScreen() {
@@ -26,27 +39,16 @@ export default function SignupScreen() {
   const [error, setError] = useState<string | null>(null);
 
   async function run(action: () => Promise<void>, failure: string) {
-  setError(null);
-  setLoading(true);
-
-  try {
-    await action();
-  } catch (err: any) {
-    console.error('SIGNUP ERROR:', err);
-
-    const clerkError =
-      err?.errors?.[0]?.longMessage ||
-      err?.errors?.[0]?.message ||
-      err?.message ||
-      failure;
-
-    console.error('CLERK ERROR MESSAGE:', clerkError);
-
-    setError(clerkError);
-  } finally {
-    setLoading(false);
+    setError(null);
+    setLoading(true);
+    try {
+      await action();
+    } catch (err) {
+      setError(clerkErrorMessage(err, failure));
+    } finally {
+      setLoading(false);
+    }
   }
-}
 
   const sendCode = async () => {
     const { error: sendError } = await signUp.verifications.sendEmailCode();
@@ -55,10 +57,23 @@ export default function SignupScreen() {
 
   const onSubmit = () =>
     run(async () => {
-      const { error: createError } = await signUp.password({
-  emailAddress: email.trim(),
-  password,
-});
+      const emailAddress = email.trim();
+      const [firstName, ...rest] = name.trim().split(/\s+/);
+      const lastName = rest.join(' ');
+
+      // Send the name so the backend profile shows it instead of the email
+      // prefix. If the Clerk instance has name collection switched off it
+      // rejects the unknown parameter; the account is still valid without
+      // it, so retry once without rather than blocking sign-up.
+      let { error: createError } = await signUp.password({
+        emailAddress,
+        password,
+        ...(firstName ? { firstName } : {}),
+        ...(lastName ? { lastName } : {}),
+      });
+      if (createError && firstName && hasErrorCode(createError, 'form_param_unknown')) {
+        ({ error: createError } = await signUp.password({ emailAddress, password }));
+      }
       if (createError) throw createError;
       await sendCode();
       setVerifying(true);

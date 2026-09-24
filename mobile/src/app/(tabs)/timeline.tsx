@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { usePets } from '@/hooks/use-pets';
-import { useHealthRecords } from '@/hooks/use-records';
+import { useDeleteHealthRecord, useHealthRecords } from '@/hooks/use-records';
+import { getErrorMessage } from '@/services/errors';
 import type { HealthRecord } from '@/types';
 
 const TYPE_LABEL: Record<HealthRecord['type'], string> = {
@@ -16,9 +17,13 @@ const TYPE_LABEL: Record<HealthRecord['type'], string> = {
   note: 'Note',
 };
 
-function RecordRow({ record }: { record: HealthRecord }) {
+function RecordRow({ record, onDelete }: { record: HealthRecord; onDelete: () => void }) {
   return (
-    <View style={styles.row}>
+    <Pressable
+      style={styles.row}
+      onLongPress={onDelete}
+      accessibilityLabel={`${TYPE_LABEL[record.type]}: ${record.title}, ${new Date(record.date).toLocaleDateString()}`}
+      accessibilityHint="Press and hold to delete this record">
       <View style={styles.rowDot} />
       <View style={styles.rowBody}>
         <View style={styles.rowHeader}>
@@ -33,19 +38,33 @@ function RecordRow({ record }: { record: HealthRecord }) {
         ) : null}
         {record.notes ? <Text style={styles.rowNotes}>{record.notes}</Text> : null}
       </View>
-    </View>
+    </Pressable>
   );
 }
 
 export default function TimelineScreen() {
-  const { data: pets } = usePets();
+  const { data: pets, isLoading: petsLoading } = usePets();
   const [selectedPetId, setSelectedPetId] = useState<string | null>(null);
   const activePetId = selectedPetId ?? pets?.[0]?.id ?? null;
 
-  const { data: records, isLoading, refetch, isRefetching } = useHealthRecords(activePetId ?? '');
+  const { data: records, isLoading, isError, error, refetch, isRefetching } = useHealthRecords(activePetId ?? '');
+  const deleteRecord = useDeleteHealthRecord(activePetId ?? '');
   const sorted = [...(records ?? [])].sort(
     (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
   );
+
+  const confirmDelete = (record: HealthRecord) =>
+    Alert.alert('Delete record?', `"${record.title}" will be permanently removed.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () =>
+          deleteRecord.mutate(record.id, {
+            onError: (err) => Alert.alert('Could not delete', getErrorMessage(err)),
+          }),
+      },
+    ]);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -66,8 +85,15 @@ export default function TimelineScreen() {
         </View>
       ) : null}
 
-      {isLoading ? (
+      {isLoading || petsLoading ? (
         <ActivityIndicator style={styles.center} />
+      ) : isError ? (
+        <View style={styles.center}>
+          <Text style={styles.errorText}>{getErrorMessage(error, "Couldn't load the timeline.")}</Text>
+          <Pressable style={styles.retryButton} onPress={() => refetch()} accessibilityRole="button">
+            <Text style={styles.retryButtonText}>Try again</Text>
+          </Pressable>
+        </View>
       ) : !activePetId ? (
         <View style={styles.center}>
           <Text style={styles.emptyText}>Add a pet to see their health timeline.</Text>
@@ -80,7 +106,7 @@ export default function TimelineScreen() {
         <FlatList
           data={sorted}
           keyExtractor={(r) => r.id}
-          renderItem={({ item }) => <RecordRow record={item} />}
+          renderItem={({ item }) => <RecordRow record={item} onDelete={() => confirmDelete(item)} />}
           contentContainerStyle={styles.list}
           onRefresh={refetch}
           refreshing={isRefetching}
@@ -105,6 +131,9 @@ const styles = StyleSheet.create({
   chipTextActive: { color: '#fff', fontWeight: '600' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   emptyText: { color: '#666', fontSize: 15 },
+  errorText: { color: '#d33', fontSize: 14, textAlign: 'center', paddingHorizontal: 24 },
+  retryButton: { marginTop: 12, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 10, backgroundColor: '#f0f0f0' },
+  retryButtonText: { color: '#208AEF', fontWeight: '600' },
   list: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 24 },
   row: { flexDirection: 'row', gap: 12, marginBottom: 18 },
   rowDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#208AEF', marginTop: 6 },

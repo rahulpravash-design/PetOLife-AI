@@ -7,7 +7,7 @@ import { requireOwnedPet } from '@/lib/authorize';
 import { checkAndConsumeThrottle, extractUserKey } from '@/lib/rate-limit';
 import { RECORD_TYPES } from '@/lib/validation';
 
-const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic'] as const;
+const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'] as const;
 const EXTRACT_TIMEOUT_MS = 45_000;
 
 // Caps the decoded image size; base64 inflates raw bytes by ~4/3, so this

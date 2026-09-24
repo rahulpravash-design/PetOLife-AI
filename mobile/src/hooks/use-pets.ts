@@ -18,3 +18,16 @@ export function useCreatePet() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['pets'] }),
   });
 }
+
+export function useDeletePet() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => petsService.remove(id),
+    onSuccess: (_data, id) => {
+      // Drop everything cached under this pet (records, reminders, summary)
+      // before refreshing the list so no screen briefly shows a deleted pet.
+      queryClient.removeQueries({ queryKey: ['pets', id] });
+      queryClient.invalidateQueries({ queryKey: ['pets'] });
+    },
+  });
+}

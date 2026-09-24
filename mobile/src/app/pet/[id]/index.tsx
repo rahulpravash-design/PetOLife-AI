@@ -1,10 +1,20 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
-import { usePet } from '@/hooks/use-pets';
-import { useReminders, useToggleReminder } from '@/hooks/use-reminders';
+import { useDeletePet, usePet } from '@/hooks/use-pets';
+import { useDeleteReminder, useReminders, useToggleReminder } from '@/hooks/use-reminders';
 import { useHealthSummary } from '@/hooks/use-summary';
+import { getErrorMessage } from '@/services/errors';
 import { cancelReminderNotification, scheduleReminderNotification } from '@/services/notifications';
 import type { AttentionItem, Pattern, Reminder, WhatChanged } from '@/types';
 
@@ -41,9 +51,24 @@ function ExplainableCard({
   );
 }
 
-function ReminderRow({ reminder, onToggle }: { reminder: Reminder; onToggle: () => void }) {
+function ReminderRow({
+  reminder,
+  onToggle,
+  onDelete,
+}: {
+  reminder: Reminder;
+  onToggle: () => void;
+  onDelete: () => void;
+}) {
   return (
-    <Pressable style={styles.reminderRow} onPress={onToggle}>
+    <Pressable
+      style={styles.reminderRow}
+      onPress={onToggle}
+      onLongPress={onDelete}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: reminder.isDone }}
+      accessibilityLabel={`${reminder.title}, due ${new Date(reminder.dueDate).toLocaleDateString()}`}
+      accessibilityHint="Double tap to mark done. Press and hold to delete.">
       <View style={[styles.reminderCheckbox, reminder.isDone && styles.reminderCheckboxDone]}>
         {reminder.isDone ? <Text style={styles.reminderCheckmark}>✓</Text> : null}
       </View>
@@ -60,10 +85,62 @@ function ReminderRow({ reminder, onToggle }: { reminder: Reminder; onToggle: () 
 export default function PetDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data: pet } = usePet(id);
-  const { data: summary, isLoading, isError, refetch: refetchSummary, isRefetching: isRefetchingSummary } =
-    useHealthSummary(id);
+  const {
+    data: summary,
+    isLoading,
+    isError,
+    error: summaryError,
+    refetch: refetchSummary,
+    isRefetching: isRefetchingSummary,
+  } = useHealthSummary(id);
   const { data: reminders, refetch: refetchReminders } = useReminders(id);
   const toggleReminder = useToggleReminder(id);
+  const deleteReminder = useDeleteReminder(id);
+  const deletePet = useDeletePet();
+
+  // Notification scheduling is best-effort: the reminder state is already
+  // saved, so a scheduler failure must not surface as an unhandled rejection.
+  const syncNotification = (r: Reminder, nextDone: boolean) => {
+    const work = nextDone
+      ? cancelReminderNotification(r.id)
+      : scheduleReminderNotification(r.id, r.title, r.dueDate);
+    work.catch(() => {});
+  };
+
+  const confirmDeleteReminder = (r: Reminder) =>
+    Alert.alert('Delete reminder?', `"${r.title}" will be removed.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () =>
+          deleteReminder.mutate(r.id, {
+            onSuccess: () => cancelReminderNotification(r.id).catch(() => {}),
+            onError: (err) => Alert.alert('Could not delete', getErrorMessage(err)),
+          }),
+      },
+    ]);
+
+  const confirmDeletePet = () =>
+    Alert.alert(
+      `Delete ${pet?.name ?? 'this pet'}?`,
+      'This permanently deletes the pet and all of their health records and reminders. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () =>
+            deletePet.mutate(id, {
+              onSuccess: () => {
+                (reminders ?? []).forEach((r) => cancelReminderNotification(r.id).catch(() => {}));
+                router.replace('/');
+              },
+              onError: (err) => Alert.alert('Could not delete', getErrorMessage(err)),
+            }),
+        },
+      ],
+    );
 
   return (
     <ScrollView
@@ -81,10 +158,18 @@ export default function PetDetailScreen() {
       <View style={styles.header}>
         <Text style={styles.petName}>{pet?.name ?? 'Pet'}</Text>
         <View style={styles.headerActions}>
-          <Pressable style={styles.scanButton} onPress={() => router.push(`/pet/${id}/scan`)}>
+          <Pressable
+            style={styles.scanButton}
+            onPress={() => router.push(`/pet/${id}/scan`)}
+            accessibilityRole="button"
+            accessibilityLabel="Scan a document">
             <Text style={styles.scanButtonText}>Scan</Text>
           </Pressable>
-          <Pressable style={styles.addButton} onPress={() => router.push(`/pet/${id}/add-record`)}>
+          <Pressable
+            style={styles.addButton}
+            onPress={() => router.push(`/pet/${id}/add-record`)}
+            accessibilityRole="button"
+            accessibilityLabel="Add a health record">
             <Text style={styles.addButtonText}>+ Add Record</Text>
           </Pressable>
         </View>
@@ -92,7 +177,11 @@ export default function PetDetailScreen() {
 
       <View style={styles.reminderHeader}>
         <Text style={styles.sectionTitle}>Reminders</Text>
-        <Pressable onPress={() => router.push(`/pet/${id}/add-reminder`)}>
+        <Pressable
+          onPress={() => router.push(`/pet/${id}/add-reminder`)}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="Add a reminder">
           <Text style={styles.reminderAddLink}>+ Add</Text>
         </Pressable>
       </View>
@@ -105,20 +194,29 @@ export default function PetDetailScreen() {
             reminder={r}
             onToggle={() => {
               const nextDone = !r.isDone;
-              toggleReminder.mutate({ id: r.id, isDone: nextDone });
-              if (nextDone) {
-                cancelReminderNotification(r.id);
-              } else {
-                scheduleReminderNotification(r.id, r.title, r.dueDate);
-              }
+              toggleReminder.mutate(
+                { id: r.id, isDone: nextDone },
+                {
+                  onSuccess: () => syncNotification(r, nextDone),
+                  onError: (err) => Alert.alert('Could not update reminder', getErrorMessage(err)),
+                },
+              );
             }}
+            onDelete={() => confirmDeleteReminder(r)}
           />
         ))
       )}
 
       {isLoading ? (
         <ActivityIndicator style={styles.loading} />
-      ) : isError || !summary ? (
+      ) : isError ? (
+        <View>
+          <Text style={styles.errorText}>{getErrorMessage(summaryError, "Couldn't load the health summary.")}</Text>
+          <Pressable style={styles.retryButton} onPress={() => refetchSummary()} accessibilityRole="button">
+            <Text style={styles.retryButtonText}>Try again</Text>
+          </Pressable>
+        </View>
+      ) : !summary ? (
         <Text style={styles.emptyText}>No AI summary yet — add a few health records first.</Text>
       ) : (
         <>
@@ -155,8 +253,22 @@ export default function PetDetailScreen() {
               ))}
             </>
           ) : null}
+
+          <Text style={styles.disclaimer}>
+            This summary is generated from the records you saved. It is not a diagnosis or veterinary advice —
+            talk to your vet about any health concerns.
+          </Text>
         </>
       )}
+
+      <Pressable
+        style={styles.deleteButton}
+        onPress={confirmDeletePet}
+        disabled={deletePet.isPending}
+        accessibilityRole="button"
+        accessibilityLabel={`Delete ${pet?.name ?? 'this pet'}`}>
+        <Text style={styles.deleteButtonText}>{deletePet.isPending ? 'Deleting…' : 'Delete pet'}</Text>
+      </Pressable>
     </ScrollView>
   );
 }
@@ -173,6 +285,12 @@ const styles = StyleSheet.create({
   scanButtonText: { color: '#333', fontWeight: '600', fontSize: 13 },
   loading: { marginTop: 40 },
   emptyText: { color: '#666', fontSize: 15, marginTop: 20 },
+  errorText: { color: '#d33', fontSize: 14, marginTop: 20 },
+  retryButton: { alignSelf: 'flex-start', marginTop: 8, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, backgroundColor: '#f0f0f0' },
+  retryButtonText: { color: '#208AEF', fontWeight: '600' },
+  disclaimer: { fontSize: 12, color: '#888', marginTop: 20, lineHeight: 17 },
+  deleteButton: { marginTop: 36, borderWidth: 1, borderColor: '#d33', borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
+  deleteButtonText: { color: '#d33', fontSize: 15, fontWeight: '600' },
   sectionTitle: { fontSize: 15, fontWeight: '700', color: '#208AEF', marginTop: 20, marginBottom: 8, textTransform: 'uppercase' },
   bodyText: { fontSize: 15, color: '#333', lineHeight: 22 },
   changeRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#eee' },

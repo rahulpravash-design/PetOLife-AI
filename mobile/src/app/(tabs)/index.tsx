@@ -4,11 +4,16 @@ import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from '
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { usePets } from '@/hooks/use-pets';
+import { getErrorMessage } from '@/services/errors';
 import type { Pet } from '@/types';
 
 function PetCard({ pet }: { pet: Pet }) {
   return (
-    <Pressable style={styles.card} onPress={() => router.push(`/pet/${pet.id}`)}>
+    <Pressable
+      style={styles.card}
+      onPress={() => router.push(`/pet/${pet.id}`)}
+      accessibilityRole="button"
+      accessibilityLabel={`${pet.name}, ${pet.breed ?? pet.species}`}>
       <View style={styles.cardAvatar}>
         <Text style={styles.cardAvatarText}>{pet.name.charAt(0).toUpperCase()}</Text>
       </View>
@@ -22,13 +27,18 @@ function PetCard({ pet }: { pet: Pet }) {
 }
 
 export default function HomeScreen() {
-  const { data: pets, isLoading, isError, refetch, isRefetching } = usePets();
+  const { data: pets, isLoading, isError, error, refetch, isRefetching } = usePets();
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Your Pets</Text>
-        <Pressable style={styles.addButton} onPress={() => router.push('/pet/new')}>
+        <Pressable
+          style={styles.addButton}
+          onPress={() => router.push('/pet/new')}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Add a pet">
           <Ionicons name="add" size={22} color="#fff" />
         </Pressable>
       </View>
@@ -37,7 +47,10 @@ export default function HomeScreen() {
         <ActivityIndicator style={styles.center} />
       ) : isError ? (
         <View style={styles.center}>
-          <Text style={styles.emptyText}>Couldn&apos;t load your pets. Pull to retry.</Text>
+          <Text style={styles.emptyText}>{getErrorMessage(error, "Couldn't load your pets.")}</Text>
+          <Pressable style={styles.retryButton} onPress={() => refetch()} accessibilityRole="button">
+            <Text style={styles.emptyLinkText}>Try again</Text>
+          </Pressable>
         </View>
       ) : !pets || pets.length === 0 ? (
         <View style={styles.center}>
@@ -82,6 +95,7 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   emptyText: { color: '#666', fontSize: 15 },
   emptyLink: { marginTop: 4 },
+  retryButton: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 10, backgroundColor: '#f0f0f0' },
   emptyLinkText: { color: '#208AEF', fontSize: 15, fontWeight: '600' },
   list: { paddingHorizontal: 20, gap: 12 },
   card: {

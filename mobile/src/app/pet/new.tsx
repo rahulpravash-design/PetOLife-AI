@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { useCreatePet } from '@/hooks/use-pets';
+import { getErrorMessage } from '@/services/errors';
 import type { Pet } from '@/types';
 
 const SPECIES: Pet['species'][] = ['dog', 'cat', 'other'];
@@ -12,16 +13,29 @@ export default function NewPetScreen() {
   const [name, setName] = useState('');
   const [species, setSpecies] = useState<Pet['species']>('dog');
   const [breed, setBreed] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   async function onSave() {
-    const pet = await createPet.mutateAsync({ name: name.trim(), species, breed: breed.trim() || undefined });
-    router.replace(`/pet/${pet.id}`);
+    setError(null);
+    try {
+      const pet = await createPet.mutateAsync({ name: name.trim(), species, breed: breed.trim() || undefined });
+      router.replace(`/pet/${pet.id}`);
+    } catch (err) {
+      setError(getErrorMessage(err, "Couldn't save your pet. Please try again."));
+    }
   }
 
   return (
-    <ScrollView style={styles.safe} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.safe} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <Text style={styles.label}>Name</Text>
-      <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Bruno" />
+      <TextInput
+        style={styles.input}
+        value={name}
+        onChangeText={setName}
+        placeholder="Bruno"
+        maxLength={100}
+        accessibilityLabel="Pet name"
+      />
 
       <Text style={styles.label}>Species</Text>
       <View style={styles.row}>
@@ -36,9 +50,23 @@ export default function NewPetScreen() {
       </View>
 
       <Text style={styles.label}>Breed (optional)</Text>
-      <TextInput style={styles.input} value={breed} onChangeText={setBreed} placeholder="Golden Retriever" />
+      <TextInput
+        style={styles.input}
+        value={breed}
+        onChangeText={setBreed}
+        placeholder="Golden Retriever"
+        maxLength={100}
+        accessibilityLabel="Breed (optional)"
+      />
+
+      {error ? (
+        <Text style={styles.error} accessibilityRole="alert">
+          {error}
+        </Text>
+      ) : null}
 
       <Pressable
+        accessibilityRole="button"
         style={[styles.saveButton, (!name.trim() || createPet.isPending) && styles.saveButtonDisabled]}
         onPress={onSave}
         disabled={!name.trim() || createPet.isPending}>
@@ -58,6 +86,7 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: '#208AEF' },
   chipText: { fontSize: 14, color: '#444', textTransform: 'capitalize' },
   chipTextActive: { color: '#fff', fontWeight: '600' },
+  error: { color: '#d33', fontSize: 14, marginTop: 12 },
   saveButton: { backgroundColor: '#208AEF', borderRadius: 10, paddingVertical: 14, alignItems: 'center', marginTop: 28 },
   saveButtonDisabled: { opacity: 0.5 },
   saveButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },

@@ -22,3 +22,14 @@ export function useCreateHealthRecord(petId: string) {
     },
   });
 }
+
+export function useDeleteHealthRecord(petId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (recordId: string) => recordsService.remove(petId, recordId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pets', petId, 'records'] });
+      queryClient.invalidateQueries({ queryKey: ['pets', petId, 'summary'] });
+    },
+  });
+}
